@@ -1,20 +1,26 @@
 {
-  "name": "card-triage",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "api": "npm start --workspace=server",
-    "start": "concurrently \"npm run api\" \"npm start --workspace=app --if-present\""
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "concurrently": "^7.4.0",
-    "json-server": "^0.16.1"
-  },
-  "workspaces": [
-    "server",
-    "app"
-  ]
+    "name": "card-triage",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "api": "npm start --workspace=server",
+        "start": "concurrently \"npm run api\" \"npm start --workspace=app --if-present\""
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "concurrently": "^7.4.0",
+        "json-server": "^0.16.1"
+    },
+    "workspaces": [
+        "server",
+        "app"
+    ],
+    "devDependencies": {
+        "eslint-config-prettier": "^9.0.0",
+        "eslint-plugin-unused-imports": "^3.0.0",
+        "prettier": "^3.0.3",
+        "prettier-plugin-tailwindcss": "^0.5.4"
+    }
 }

@@ -1,18 +1,55 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useReducer } from 'react'
 import { DragDropContext, DropResult } from 'react-beautiful-dnd'
 import { CardType, cardsHooks } from '../api/cards'
 import { Column } from '@/components/Column'
 import { SearchBar } from '@/components/SearchBar'
 
+const MIN_SEARCH_LENGTH = 2
+
+type FilterState = {
+  searchValue: string
+  filterValues: string[]
+  cards: Record<'todo' | 'done', CardType[]>
+}
+
+type FilterAction =
+  | { type: 'SET_SEARCH_VALUE'; payload: string }
+  | { type: 'TOGGLE_FILTER_VALUE'; payload: string }
+  | { type: 'SET_CARDS'; payload: Record<'todo' | 'done', CardType[]> }
+
+const filterReducer = (state: FilterState, action: FilterAction) => {
+  switch (action.type) {
+    case 'SET_SEARCH_VALUE':
+      return { ...state, searchValue: action.payload }
+    case 'TOGGLE_FILTER_VALUE':
+      return {
+        ...state,
+        filterValues: state.filterValues.includes(action.payload)
+          ? state.filterValues.filter((current) => current !== action.payload)
+          : [...state.filterValues, action.payload],
+      }
+    case 'SET_CARDS':
+      return { ...state, cards: action.payload }
+    default:
+      return state
+  }
+}
+
+const initialState: FilterState = {
+  searchValue: '',
+  filterValues: [],
+  cards: {
+    todo: [],
+    done: [],
+  },
+}
+
 export const Board = () => {
   const { useGetCards } = cardsHooks
 
-  const [cards, setCards] = useState<Record<'todo' | 'done', CardType[]>>({
-    todo: [],
-    done: [],
-  })
+  const [state, dispatch] = useReducer(filterReducer, initialState)
 
-  const [searchValue, setSearchValue] = useState('')
+  const { searchValue, filterValues, cards } = state
 
   const { data, isLoading } = useGetCards(undefined, {
     refetchOnWindowFocus: false,
@@ -25,25 +62,35 @@ export const Board = () => {
     value: arrhythmia,
   }))
 
-  const [filterValues, setFilterValues] = useState<string[]>([])
-
-  const filteredTodoCardsByName = filterCardsByName(cards.todo)
-  const filteredDoneCardsByName = filterCardsByName(cards.done)
-
-  const filteredTodoCards = filterCardsByArrhythmia(filteredTodoCardsByName)
-  const filteredDoneCards = filterCardsByArrhythmia(filteredDoneCardsByName)
-
   useEffect(() => {
     if (data) {
       const todo = data
         .filter((card) => card.status !== 'DONE')
         .sort((card) => (card.status === 'REJECTED' ? 1 : -1))
       const done = data.filter((card) => card.status === 'DONE')
-      setCards({ todo, done })
+      dispatch({ type: 'SET_CARDS', payload: { todo, done } })
     }
   }, [data])
 
-  if (isLoading) return <div>Loading...</div>
+  const filterCardsByName = useCallback(
+    (cardsList: CardType[]) => {
+      if (searchValue.length < MIN_SEARCH_LENGTH) return cardsList
+      return cardsList.filter((card) =>
+        card.patient_name.toLowerCase().includes(searchValue.toLowerCase())
+      )
+    },
+    [searchValue]
+  )
+
+  const filterCardsByArrhythmia = useCallback(
+    (cardsList: CardType[]) => {
+      if (filterValues.length === 0) return cardsList
+      return cardsList.filter((card) =>
+        card.arrhythmias.some((arrhythmia) => filterValues.includes(arrhythmia))
+      )
+    },
+    [filterValues]
+  )
 
   function onDragEnd({ source, destination }: DropResult) {
     // dropped outside the list
@@ -53,8 +100,9 @@ export const Board = () => {
     if (
       source.droppableId === destination.droppableId &&
       destination.index === source.index
-    )
+    ) {
       return null
+    }
 
     const start = source.droppableId as keyof typeof cards
     const end = destination.droppableId as keyof typeof cards
@@ -73,7 +121,10 @@ export const Board = () => {
       newList.splice(destinationIndex, 0, cards[start][sourceIndex])
 
       // update state
-      setCards((state) => ({ ...state, [start]: newList }))
+      dispatch({
+        type: 'SET_CARDS',
+        payload: { ...cards, [start]: newList },
+      })
       return null
     }
     // dropped in different column
@@ -93,40 +144,28 @@ export const Board = () => {
       endList.splice(destinationIndex, 0, removed)
 
       // update state
-      setCards((state) => ({
-        ...state,
-        [start]: startList,
-        [end]: endList,
-      }))
+      dispatch({
+        type: 'SET_CARDS',
+        payload: { ...cards, [start]: startList, [end]: endList },
+      })
     }
-    return null
   }
 
   function onSelectFilter(value: string) {
-    if (filterValues.includes(value)) {
-      setFilterValues((state) => state.filter((current) => value !== current))
-    } else {
-      setFilterValues((state) => [...state, value])
-    }
+    dispatch({ type: 'TOGGLE_FILTER_VALUE', payload: value })
   }
 
   const onFilterByName = (value: string) => {
-    setSearchValue(value)
+    dispatch({ type: 'SET_SEARCH_VALUE', payload: value })
   }
 
-  function filterCardsByName(cardsList: CardType[]) {
-    if (searchValue.length < 2) return cardsList
-    return cardsList.filter((card) =>
-      card.patient_name.toLowerCase().includes(searchValue.toLowerCase())
-    )
-  }
+  const filteredTodoCardsByName = filterCardsByName(cards.todo)
+  const filteredDoneCardsByName = filterCardsByName(cards.done)
 
-  function filterCardsByArrhythmia(cardsList: CardType[]) {
-    if (filterValues.length === 0) return cardsList
-    return cardsList.filter((card) =>
-      card.arrhythmias.some((arrhythmia) => filterValues.includes(arrhythmia))
-    )
-  }
+  const filteredTodoCards = filterCardsByArrhythmia(filteredTodoCardsByName)
+  const filteredDoneCards = filterCardsByArrhythmia(filteredDoneCardsByName)
+
+  if (isLoading) return <div>Loading...</div>
 
   return (
     <div className="flex h-[100vh] w-full justify-center pt-8">
